@@ -1,0 +1,77 @@
+---
+name: Build / Push Container
+
+on:
+  workflow_call:
+    inputs:
+      registry:
+        type: string
+        required: true
+        description: 'Target AWS ECR registry'
+      path:
+        type: string
+        required: true
+        description: 'Path to docker container to build'
+      ecr_path:
+        type: string
+        required: false
+        description: 'Path in ECR'
+      target:
+        type: string
+        required: false
+        description: 'Target build stage for container'
+        default: 'image'
+      push:
+        type: boolean
+        required: false
+        description: 'Flag to push container'
+        default: false
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+jobs:
+  build:
+    name: Build Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build Image
+        run: |-
+          cd 'containers/${{ inputs.path }}'
+
+          ECR_PATH='${{ inputs.ecr_path }}'
+          ECR_PATH="${ECR_PATH:-"${{ inputs.path }}"}"
+
+          DOCKER_BUILDKIT=1 docker build \
+              --progress plain \
+              --cache-from='${{ inputs.registry }}/${{ inputs.path }}:latest' \
+              --build-arg BUILDKIT_INLINE_CACHE=1 \
+              --tag "${{ inputs.registry }}/${ECR_PATH}:${GITHUB_SHA::8}" \
+              --tag "${{ inputs.registry }}/${ECR_PATH}:latest" \
+              --target '${{ inputs.target }}' \
+              --file Dockerfile .
+
+      - name: Push Image
+        if: ${{ inputs.push }}
+        run: |-
+          ECR_PATH='${{ inputs.ecr_path }}'
+          ECR_PATH="${ECR_PATH:-"${{ inputs.path }}"}"
+
+          docker push "${{ inputs.registry }}/${ECR_PATH}:${GITHUB_SHA::8}"
+          docker push "${{ inputs.registry }}/${ECR_PATH}:latest"
