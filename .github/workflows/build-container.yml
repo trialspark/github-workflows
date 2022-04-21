@@ -53,8 +53,6 @@ jobs:
 
       - name: Build Image
         run: |-
-          cd 'containers/${{ inputs.path }}'
-
           ECR_PATH='${{ inputs.ecr_path }}'
           ECR_PATH="${ECR_PATH:-"${{ inputs.path }}"}"
 
