@@ -20,7 +20,7 @@ on:
         type: string
         required: false
         description: 'Target build stage for container'
-        default: 'image'
+        default: ''
       push:
         type: boolean
         required: false
