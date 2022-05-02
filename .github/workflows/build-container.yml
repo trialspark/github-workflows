@@ -26,6 +26,16 @@ on:
         required: false
         description: 'Flag to push container'
         default: false
+      github_token:
+        type: string
+        required: false
+        description: 'Github personal access token for API use'
+        default: 'replace me'
+      github_username:
+        type: string
+        required: false
+        description: 'Github personal access token for api use'
+        default: 'replace me'
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -54,7 +64,7 @@ jobs:
       - name: Build Image
         run: |-
           cd '${{ inputs.path }}'
-        
+
           ECR_PATH='${{ inputs.ecr_path }}'
           ECR_PATH="${ECR_PATH:-"${{ inputs.path }}"}"
 
@@ -62,6 +72,8 @@ jobs:
               --progress plain \
               --cache-from='${{ inputs.registry }}/${{ inputs.path }}:latest' \
               --build-arg BUILDKIT_INLINE_CACHE=1 \
+              --build-arg github_token="${{inputs.github_token}}" \
+              --build-arg github_username="${{inputs.github_username}}" \
               --tag "${{ inputs.registry }}/${ECR_PATH}:${GITHUB_SHA::8}" \
               --tag "${{ inputs.registry }}/${ECR_PATH}:latest" \
               --target '${{ inputs.target }}' \
