@@ -38,7 +38,6 @@ on:
         required: true
       GH_TOKEN:
         required: false
-        default: 'replace me'
 jobs:
   build:
     name: Build Image
