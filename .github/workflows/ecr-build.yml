@@ -1,0 +1,116 @@
+---
+name: ECR Image Build / Push
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        type: string
+        required: false
+        default: 'us-east-1'
+      aws_role_name:
+        type: string
+        required: false
+        default: ''
+      aws_role_session_name:
+        type: string
+        required: false
+        default: 'github-actions'
+      ecr_repository_name:
+        type: string
+        required: true
+      dockerfile:
+        type: string
+        required: false
+        default: 'Dockerfile'
+      docker_context:
+        type: string
+        required: false
+        default: '.'
+      docker_target:
+        type: string
+        required: false
+        default: ''
+      github_username:
+        type: string
+        required: false
+        default: ''
+      push:
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      AWS_ACCOUNT_ID:
+        required: true
+      GH_TOKEN:
+        required: false
+
+
+jobs:
+  BuildContainerImage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Env Vars
+        id: generate-env-vars
+        run: |-
+          echo '::set-output name=ECR_REGISTRY_URI::${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com'
+          echo '::set-output name=ECR_REPOSITORY_URI::${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.ecr_repository_name }}'
+
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ inputs.aws_region }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ inputs.aws_role_name }}
+          role-session-name: ${{ inputs.aws_role_session_name }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build Container Image
+        shell: bash
+        run: |-
+          export DOCKER_BUILDKIT=1
+
+          export ECR_REGISTRY_URI='${{ steps.generate-env-vars.outputs.ECR_REGISTRY_URI }}'
+          export ECR_REPOSITORY_URI='${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}'
+
+          declare -a docker_args=(
+              '--progress=plain'
+              "--cache-from=$ECR_REPOSITORY_URI:latest"
+              "--tag=$ECR_REPOSITORY_URI:${GITHUB_SHA::8}"
+              "--tag=$ECR_REPOSITORY_URI:latest"
+              '--file=${{ inputs.dockerfile }}'
+              '--build-arg=BUILDKIT_INLINE_CACHE=1'
+          )
+
+          if [ -n "${{ secrets.GH_TOKEN }}" ]; then
+              docker_args+=('--build-arg=github_token=${{ secrets.GH_TOKEN }}')
+          fi
+
+          if [ -n "${{ inputs.github_username }}" ]; then
+              docker_args+=('--build-arg=github_username=${{ inputs.github_username }}')
+          fi
+
+          if [ -n "${{ inputs.docker_target }}" ]; then
+              docker_args+=('--target=${{ inputs.docker_target }}')
+          fi
+
+          docker build "${docker_args[@]}" '${{ inputs.docker_context }}'
+
+      - name: Push Image
+        if: ${{ inputs.push }}
+        run: |-
+          export ECR_REPOSITORY_URI='${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}'
+
+          ECR_PATH='${{ inputs.ecr_path }}'
+          ECR_PATH="${ECR_PATH:-"${{ inputs.path }}"}"
+
+          docker push "${ECR_REPOSITORY_URI}:${GITHUB_SHA::8}"
+          docker push "${ECR_REPOSITORY_URI}:latest"
