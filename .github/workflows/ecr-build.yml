@@ -23,6 +23,10 @@ on:
       ecr_repository_name:
         type: string
         required: true
+      path:
+        type: string
+        required: false
+        default: ''
       dockerfile:
         type: string
         required: false
@@ -76,6 +80,10 @@ jobs:
       - name: Build Container Image
         shell: bash
         run: |-
+          if [ -d '${{ inputs.path }}' ]; then
+              cd '${{ inputs.path }}'
+          fi
+
           export DOCKER_BUILDKIT=1
 
           export ECR_REGISTRY_URI='${{ steps.generate-env-vars.outputs.ECR_REGISTRY_URI }}'
