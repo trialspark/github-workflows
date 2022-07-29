@@ -39,6 +39,14 @@ on:
         type: string
         required: false
         default: ''
+      docker_build_args:
+        type: string
+        required: false
+        default: ''
+      docker_tags:
+        type: string
+        required: false
+        default: 'latest'
       github_username:
         type: string
         required: false
@@ -52,7 +60,6 @@ on:
         required: true
       GH_TOKEN:
         required: false
-
 
 jobs:
   BuildContainerImage:
@@ -91,22 +98,35 @@ jobs:
 
           declare -a docker_args=(
               '--progress=plain'
-              "--cache-from=$ECR_REPOSITORY_URI:latest"
-              "--tag=$ECR_REPOSITORY_URI:${GITHUB_SHA::8}"
-              "--tag=$ECR_REPOSITORY_URI:latest"
+              "--tag=${ECR_REPOSITORY_URI}:${GITHUB_SHA::8}"
               '--file=${{ inputs.dockerfile }}'
               '--build-arg=BUILDKIT_INLINE_CACHE=1'
           )
 
-          if [ -n "${{ secrets.GH_TOKEN }}" ]; then
+          IFS=', ' read -r -a docker_tags <<<'${{ inputs.docker_tags }}'
+          for docker_tag in "${docker_tags[@]}"; do
+              docker_args+=(
+                  "--cache-from=${ECR_REPOSITORY_URI}:${docker_tag}"
+                  "--tag=${ECR_REPOSITORY_URI}:${docker_tag}"
+              )
+          done
+
+          if [ -n '${{ inputs.docker_build_args }}' ]; then
+              IFS=', ' read -r -a build_args <<<'${{ inputs.docker_build_args }}'
+              for build_arg in "${build_args[@]}"; do
+                  docker_args+=('--build-arg=${build_args}')
+              done
+          fi
+
+          if [ -n '${{ secrets.GH_TOKEN }}' ]; then
               docker_args+=('--build-arg=github_token=${{ secrets.GH_TOKEN }}')
           fi
 
-          if [ -n "${{ inputs.github_username }}" ]; then
+          if [ -n '${{ inputs.github_username }}' ]; then
               docker_args+=('--build-arg=github_username=${{ inputs.github_username }}')
           fi
 
-          if [ -n "${{ inputs.docker_target }}" ]; then
+          if [ -n '${{ inputs.docker_target }}' ]; then
               docker_args+=('--target=${{ inputs.docker_target }}')
           fi
 
@@ -117,8 +137,9 @@ jobs:
         run: |-
           export ECR_REPOSITORY_URI='${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}'
 
-          ECR_PATH='${{ inputs.ecr_path }}'
-          ECR_PATH="${ECR_PATH:-"${{ inputs.path }}"}"
-
           docker push "${ECR_REPOSITORY_URI}:${GITHUB_SHA::8}"
-          docker push "${ECR_REPOSITORY_URI}:latest"
+
+          IFS=', ' read -r -a docker_tags <<<'${{ inputs.docker_tags }}'
+          for docker_tag in "${docker_tags[@]}"; do
+              docker push "${ECR_REPOSITORY_URI}:${docker_tag}"
+          done
