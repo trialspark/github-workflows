@@ -1,0 +1,124 @@
+---
+name: ECR Build Image
+
+inputs:
+  aws_region:
+    type: string
+    required: false
+    default: 'us-east-1'
+  aws_role_name:
+    type: string
+    required: false
+    default: ''
+  aws_role_session_name:
+    type: string
+    required: false
+    default: 'github-actions'
+  ecr_repository_name:
+    type: string
+    required: true
+  path:
+    type: string
+    required: false
+    default: ''
+  dockerfile:
+    type: string
+    required: false
+    default: 'Dockerfile'
+  docker_context:
+    type: string
+    required: false
+    default: '.'
+  docker_target:
+    type: string
+    required: false
+    default: ''
+  docker_build_args:
+    type: string
+    required: false
+    default: ''
+  docker_tags:
+    type: string
+    required: false
+    default: 'latest'
+  github_username:
+    type: string
+    required: false
+    default: ''
+  push:
+    type: boolean
+    required: false
+    default: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate Env Vars
+      shell: bash
+      id: generate-env-vars
+      run: |-
+        echo '::set-output name=ECR_REGISTRY_URI::${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com'
+        echo '::set-output name=ECR_REPOSITORY_URI::${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.ecr_repository_name }}'
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-region: ${{ inputs.aws_region }}
+        role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ inputs.aws_role_name }}
+        role-session-name: ${{ inputs.aws_role_session_name }}
+
+    - name: Login to ECR
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build Container Image
+      shell: bash
+      run: |-
+        if [ -d '${{ inputs.path }}' ]; then
+            cd '${{ inputs.path }}'
+        fi
+
+        export DOCKER_BUILDKIT=1
+
+        export ECR_REGISTRY_URI='${{ steps.generate-env-vars.outputs.ECR_REGISTRY_URI }}'
+        export ECR_REPOSITORY_URI='${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}'
+
+        declare -a docker_args=(
+            '--progress=plain'
+            "--tag=${ECR_REPOSITORY_URI}:${GITHUB_SHA::8}"
+            '--file=${{ inputs.dockerfile }}'
+            '--build-arg=BUILDKIT_INLINE_CACHE=1'
+        )
+
+        IFS=', ' read -r -a docker_tags <<<'${{ inputs.docker_tags }}'
+        for docker_tag in "${docker_tags[@]}"; do
+            docker_args+=(
+                "--cache-from=${ECR_REPOSITORY_URI}:${docker_tag}"
+                "--tag=${ECR_REPOSITORY_URI}:${docker_tag}"
+            )
+        done
+
+        if [ -n '${{ inputs.docker_build_args }}' ]; then
+            IFS=', ' read -r -a build_args <<<'${{ inputs.docker_build_args }}'
+            for build_arg in "${build_args[@]}"; do
+                docker_args+=('--build-arg=${build_args}')
+            done
+        fi
+
+        if [ -n '${{ inputs.docker_target }}' ]; then
+            docker_args+=('--target=${{ inputs.docker_target }}')
+        fi
+
+        docker build "${docker_args[@]}" '${{ inputs.docker_context }}'
+
+    - name: Push Image
+      shell: bash
+      if: ${{ inputs.push }}
+      run: |-
+        export ECR_REPOSITORY_URI='${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}'
+
+        docker push "${ECR_REPOSITORY_URI}:${GITHUB_SHA::8}"
+
+        IFS=', ' read -r -a docker_tags <<<'${{ inputs.docker_tags }}'
+        for docker_tag in "${docker_tags[@]}"; do
+            docker push "${ECR_REPOSITORY_URI}:${docker_tag}"
+        done
