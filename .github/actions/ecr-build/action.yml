@@ -41,6 +41,22 @@ inputs:
     type: string
     required: false
     default: 'latest'
+  image_url:
+    type: string
+    required: false
+    default: ''
+  image_title:
+    type: string
+    required: false
+    default: ''
+  image_description:
+    type: string
+    required: false
+    default: ''
+  image_documentation:
+    type: string
+    required: false
+    default: ''
   github_username:
     type: string
     required: false
@@ -84,7 +100,7 @@ runs:
 
         declare -a docker_args=(
             '--progress=plain'
-            "--tag=${ECR_REPOSITORY_URI}:${GITHUB_SHA::8}"
+            "--tag=${ECR_REPOSITORY_URI}:${GITHUB_SHA::12}"
             '--file=${{ inputs.dockerfile }}'
             '--build-arg=BUILDKIT_INLINE_CACHE=1'
         )
@@ -108,6 +124,28 @@ runs:
             docker_args+=('--target=${{ inputs.docker_target }}')
         fi
 
+        docker_args+=(
+            "--build-arg=org_opencontainers_image_created=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            "--build-arg=org_opencontainers_image_source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+            "--build-arg=org_opencontainers_image_revision=${GITHUB_SHA::12}"
+        )
+
+        if [ -n '${{ inputs.image_url }}' ]; then
+            docker_args+=('--build-args=org_opencontainers_image_url=${{ inputs.image_url }}')
+        fi
+
+        if [ -n '${{ inputs.image_title }}' ]; then
+            docker_args+=('--build-args=org_opencontainers_image_title=${{ inputs.image_title }}')
+        fi
+
+        if [ -n '${{ inputs.image_description }}' ]; then
+            docker_args+=('--build-args=org_opencontainers_image_description=${{ inputs.image_description }}')
+        fi
+
+        if [ -n '${{ inputs.image_documentation }}' ]; then
+            docker_args+=('--build-args=org_opencontainers_image_documentation=${{ inputs.image_documentation }}')
+        fi
+
         docker build "${docker_args[@]}" '${{ inputs.docker_context }}'
 
     - name: Push Image
@@ -116,7 +154,7 @@ runs:
       run: |-
         export ECR_REPOSITORY_URI='${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}'
 
-        docker push "${ECR_REPOSITORY_URI}:${GITHUB_SHA::8}"
+        docker push "${ECR_REPOSITORY_URI}:${GITHUB_SHA::12}"
 
         IFS=', ' read -r -a docker_tags <<<'${{ inputs.docker_tags }}'
         for docker_tag in "${docker_tags[@]}"; do
