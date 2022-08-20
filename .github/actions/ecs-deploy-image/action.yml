@@ -1,0 +1,93 @@
+---
+name: Update ECS Task Image
+
+inputs:
+  aws_region:
+    type: string
+    required: false
+    default: 'us-east-1'
+  aws_role_name:
+    type: string
+    required: false
+    default: ''
+  aws_role_session_name:
+    type: string
+    required: false
+    default: 'github-actions'
+  ecr_repository_name:
+    type: string
+    required: true
+  ecs_task_family:
+    type: string
+    required: true
+  ecs_task_container_name:
+    type: string
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate Env Vars
+      shell: bash
+      id: generate-env-vars
+      run: |-
+        echo '::set-output name=ECR_REGISTRY_URI::${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com'
+        echo '::set-output name=ECR_REPOSITORY_URI::${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.ecr_repository_name }}'
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-region: ${{ inputs.aws_region }}
+        role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ inputs.aws_role_name }}
+        role-session-name: ${{ inputs.aws_role_session_name }}
+
+    - name: Update ECS Task
+      shell: bash
+      run: |-
+        set -eux -o pipefail
+
+        declare -r task_definition_arn="$(
+            aws ecs list-task-definitions \
+                --family '${{ inputs.ecs_task_family }}' \
+                --query 'taskDefinitionArns' \
+                --output 'text'
+        )"
+
+        declare -r task_definition_json="$(
+            aws ecs describe-task-definition \
+                --task-definition "$task_definition_arn" \
+                --query 'taskDefinition' \
+                --output 'json'
+        )"
+
+        declare -r container_definition="$(
+            aws ecs describe-task-definition \
+                --task-definition "$task_definition" \
+                --query "taskDefinition.containerDefinitions[?name == \`${{ inputs.ecs_task_container_name }}\`]|[0]" \
+                --output json
+        )"
+
+        declare -r new_container_definition_json="$(
+            echo "$container_definition_json" |
+                jq --arg image "${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}:${GITHUB_SHA::12}" '.image = $image'
+        )"
+
+        declare -r register_task_definition_cli_template="$(
+            echo $task_definition_json |
+                jq --argjson container_definition "$new_container_definition_json" '
+                    .taskDefinition | {
+                        family,
+                        taskRoleArn,
+                        executionRoleArn,
+                        networkMode,
+                        volumes,
+                        placementConstraints,
+                        requiresCompatibilities,
+                        cpu,
+                        memory,
+                        containerDefinitions: [$container_definition]
+                    }'
+        )"
+
+        aws ecs register-task-definition \
+            --cli-input-json "$register_task_definition_cli_template"
