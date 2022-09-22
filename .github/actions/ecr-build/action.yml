@@ -160,3 +160,13 @@ runs:
         for docker_tag in "${docker_tags[@]}"; do
             docker push "${ECR_REPOSITORY_URI}:${docker_tag}"
         done
+
+    - name: Debug 1
+      if: ${{ inputs.push }}
+      run: echo "Debug 1"
+    - name: Debug 2
+      if: ${{ inputs.push == 'true' }}
+      run: echo "Debug 2"
+    - name: Debug 3
+      if: ${{ !inputs.push }}
+      run: echo "Debug 3"
