@@ -162,11 +162,14 @@ runs:
         done
 
     - name: Debug 1
+      shell: bash
       if: ${{ inputs.push }}
       run: echo "Debug 1"
     - name: Debug 2
+      shell: bash
       if: ${{ inputs.push == 'true' }}
       run: echo "Debug 2"
     - name: Debug 3
+      shell: bash
       if: ${{ !inputs.push }}
       run: echo "Debug 3"
