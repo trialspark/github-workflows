@@ -150,7 +150,7 @@ runs:
 
     - name: Push Image
       shell: bash
-      if: ${{ inputs.push }}
+      if: ${{ inputs.push == 'true' }}
       run: |-
         export ECR_REPOSITORY_URI='${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}'
 
