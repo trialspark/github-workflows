@@ -161,6 +161,9 @@ runs:
             docker push "${ECR_REPOSITORY_URI}:${docker_tag}"
         done
 
+    - name: pre-debug
+      shell: bash
+      run: echo "${{ inputs.push }}"
     - name: Debug 1
       shell: bash
       if: ${{ inputs.push }}
