@@ -1,0 +1,50 @@
+---
+name: Update Lambda Function Image
+
+inputs:
+  aws_region:
+    type: string
+    required: false
+    default: 'us-east-1'
+  aws_role_name:
+    type: string
+    required: false
+    default: ''
+  aws_role_session_name:
+    type: string
+    required: false
+    default: 'github-actions'
+  ecr_repository_name:
+    type: string
+    required: true
+  image_tag:
+    type: string
+    required: false
+    default: latest
+  lambda_function_name:
+    type: string
+    required: false
+    default: latest
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate Env Vars
+      shell: bash
+      id: generate-env-vars
+      run: |-
+        echo 'ECR_REPOSITORY_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.ecr_repository_name }}' >>"$GITHUB_OUTPUT"
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-region: ${{ inputs.aws_region }}
+        role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ inputs.aws_role_name }}
+        role-session-name: ${{ inputs.aws_role_session_name }}
+
+    - name: Update Lambda Image
+      shell: bash
+      run: |-
+        set -eux -o pipefail
+        aws lambda update-function-code --region us-east-1 --function-name '${{ inputs.lambda_function_name }}'\
+          --image-uri '${{ steps.generate-env-vars.outputs.ECR_REPOSITORY_URI }}'
