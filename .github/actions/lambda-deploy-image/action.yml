@@ -33,7 +33,7 @@ runs:
       shell: bash
       id: generate-env-vars
       run: |-
-        echo 'ECR_REPOSITORY_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.ecr_repository_name }}' >>"$GITHUB_OUTPUT"
+        echo 'ECR_REPOSITORY_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.ecr_repository_name }}:${{ inputs.image_tag }}' >>"$GITHUB_OUTPUT"
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1
