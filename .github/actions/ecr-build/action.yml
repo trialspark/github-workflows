@@ -1,70 +1,71 @@
 ---
 name: ECR Build Image
+description: Builds and may publish and image to the specified Elastic Container Registry(ECR) instance using the provided role and session
 
 inputs:
   aws_region:
-    type: string
+    description: AWS region
     required: false
     default: 'us-east-1'
   aws_role_name:
-    type: string
+    description: AWS role to use
     required: false
     default: ''
   aws_role_session_name:
-    type: string
+    description: AWS role session name to use
     required: false
     default: 'github-actions'
   ecr_repository_name:
-    type: string
+    description: Elastic Container Registry(ECR) name
     required: true
   path:
-    type: string
+    description: path to build the image in
     required: false
     default: ''
   dockerfile:
-    type: string
+    description: Dockerfile to pass to docker
     required: false
     default: 'Dockerfile'
   docker_context:
-    type: string
+    description: Docker context to pass to docker build
     required: false
     default: '.'
   docker_target:
-    type: string
+    description: The target build stage to build
     required: false
     default: ''
   docker_build_args:
-    type: string
+    description: The build arguments to pass to docker
     required: false
     default: ''
   docker_tags:
-    type: string
+    description: The docker tags to pass into docker
     required: false
     default: 'latest'
   image_url:
-    type: string
+    description: Image url used for annotation per the open containers specification
     required: false
     default: ''
   image_title:
-    type: string
+    description: Human-readable title of the image
     required: false
     default: ''
   image_description:
-    type: string
+    description: human readable description for the artifact
     required: false
     default: ''
   image_documentation:
-    type: string
+    description: URL to find more information on the image
     required: false
     default: ''
   github_username:
-    type: string
+    description: This is not used at this time
     required: false
     default: ''
   push:
-    type: boolean
+    description: Flag determining whether to push the built docker image to Elastic Container Registry(ECR)
     required: false
-    default: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -113,10 +114,10 @@ runs:
             )
         done
 
-        if [ -n '${{ inputs.docker_build_args }}' ]; then
-            IFS=', ' read -r -a build_args <<<'${{ inputs.docker_build_args }}'
+        if [ -n "${inputs.docker_build_args}" ]; then
+            IFS=', ' read -r -a build_args <<<"${inputs.docker_build_args}"
             for build_arg in "${build_args[@]}"; do
-                docker_args+=('--build-arg=${build_args}')
+                docker_args+=("--build-arg=${build_args}")
             done
         fi
 
