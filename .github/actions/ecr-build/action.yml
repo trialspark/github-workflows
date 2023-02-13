@@ -114,8 +114,8 @@ runs:
             )
         done
 
-        if [ -n "${inputs.docker_build_args}" ]; then
-            IFS=', ' read -r -a build_args <<<"${inputs.docker_build_args}"
+        if [ -n "${{ inputs.docker_build_args }}" ]; then
+            IFS=', ' read -r -a build_args <<<"${{ inputs.docker_build_args }}"
             for build_arg in "${build_args[@]}"; do
                 docker_args+=("--build-arg=${build_args}")
             done
